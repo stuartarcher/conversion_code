@@ -1,5 +1,5 @@
 console.log("start conversion module");
-  console.log(DataLayer);
+  //console.log(DataLayer);
   
 	 // single variable for DataLayer Name
     // can be overridden with a window level variable.
