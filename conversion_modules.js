@@ -1,6 +1,16 @@
 console.log("start conversion module");
-  console.log(DataLayer);
-  
+  if(window.DataLayer){
+console.log(window.DataLayer);
+  }
+else{
+console.log("DataLayer not available");
+}
+  if(window.rm_trans){
+console.log(window.rm_trans);
+  }
+else{
+console.log("rm_trans not available");
+}
 	 // single variable for DataLayer Name
     // can be overridden with a window level variable.
     var dln = window.rakutenDataLayerName || 'DataLayer';
