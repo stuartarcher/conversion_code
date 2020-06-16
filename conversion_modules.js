@@ -11,11 +11,41 @@ console.log(window.rm_trans);
 else{
 console.log("rm_trans not available");
 }
-	 // single variable for DataLayer Name
+// encapsulated self executing function rather than global functions.
+// Two global objects are created:
+// window.rakutenDataLayerName
+// window[window.rakutenDataLayerName || 'DataLayer']
+// To override the data layer name simply set a window level variable window.rakutenDataLayerName to the new DataLayer object name.
+// You will still need to update the Global code and change the settings in the site_js_attributes.
+// rm_trans can be set as a global object or a local object - either will work as long as these two are in the same function and script block.
+
+
+// parameters passed in are
+// a reference to window and document - shortens the minified tag by ~200 characters.
+// the conversion datalayer object (assumed its called rm_trans) - if not this just needs to be changed in the function input at the bottom of the doc.
+!function(window, document, rm_trans) {
+
+    // single variable for DataLayer Name
     // can be overridden with a window level variable.
     var dln = window.rakutenDataLayerName || 'DataLayer';
+    window[dln] = window[dln] || {};
 
-  
+    // Set up the SPIVersion variable and events objcet
+    window[dln].events = window[dln].events || {};
+    window[dln].events.SPIVersion = "3.4.1";
+
+    // create the basket
+    window[dln].Sale = window[dln].Sale || {};
+    window[dln].Sale.Basket = window[dln].Sale.Basket || {};
+
+    // set the basket ready flag to a numeric integer if it is not set
+    // increment the Ready flag if it is already set
+    rm_trans.Ready = window[dln].Sale.Basket.Ready && window[dln].Sale.Basket.Ready+1 || 1;
+
+    // finally set the rm_trans as the basket object.
+    window[dln].Sale.Basket = rm_trans;
+
+
     // The readRMCookie function spilts the document.cookie apart and returns the value of 
     // the cookie with the key matching the name
     var readRMCookie = function(name) {
@@ -43,10 +73,10 @@ console.log("rm_trans not available");
         var rmStoreString = str || '';
         var rmStore = {};
 
-        if (!str) {
+        if(!str) {
             rmStoreString = readRMCookie('rmStore');
         }
-        if (rmStoreString) {
+        if(rmStoreString) {
             while (rmStoreString !== decodeURIComponent(rmStoreString)) {
                 rmStoreString = decodeURIComponent(rmStoreString);
             }
@@ -76,11 +106,11 @@ console.log("rm_trans not available");
     // configObjKey is used to look up a value from the passed in configObj
     // the function returns the first non-false value of the rmStore value, configObj vlaue, and input defaultVal
     // if "ignoreCookie" is set in the config, the rmStore value is completely ignored.
-    var readRMStoreValue = function(rmStoreKey, configObjKey, defaultVal, configObj) {
+    var readRMStoreValue  = function(rmStoreKey, configObjKey, defaultVal, configObj) {
 
         defaultVal = defaultVal || "";
         configObj = configObj || {};
-
+        
         var rmStoreVal = rmStore[rmStoreKey || ""],
             configVal = configObj[configObjKey || ""],
             ignoreCookie = configObj["ignoreCookie"] || false;
@@ -109,31 +139,31 @@ console.log("rm_trans not available");
         node.src = src;
         attributes = attributes || {};
 
-        if (nodeType == 'script') {
+        if(nodeType == 'script') {
             attributes['type'] = attributes['type'] || 'text/javascript';
         } else {
             attributes['style'] = 'display:none;';
-            if (nodeType == 'img') {
+            if(nodeType == 'img') {
                 attributes['alt'] = '';
                 attributes['height'] = '1';
                 attributes['width'] = '1';
             }
         }
-        for (var attr in attributes) {
-            if (attributes.hasOwnProperty(attr)) {
+        for(var attr in attributes) {
+            if(attributes.hasOwnProperty(attr)) {
                 node.setAttribute(attr, attributes[attr]);
             }
         }
 
         var appendElemTo = document.getElementsByTagName(appendLocation);
         // the appendToElemTo doesn't exist - this script has to exist so grab that instead
-        if (!appendElemTo.length) {
+        if(!appendElemTo.length)  {
             appendElemTo = document.getElementsByTagName('script')[0].parentElement;
         } else {
             appendElemTo = appendElemTo[0];
         }
 
-        if (loadCallback) {
+        if(loadCallback) {
             node.onload = loadCallback;
             node.onreadystatechange = function() {
                 if (this.readyState == "complete" || this.readyState == "loaded") {
@@ -144,10 +174,23 @@ console.log("rm_trans not available");
         appendElemTo.appendChild(node);
     };
 
+
+    //creates a random order id
+    var generateOrderId = function(merchantID) {
+        var today = new Date();
+        var todayFormatted = today.getUTCFullYear() +
+            ("0" + (today.getUTCMonth()+1)).slice(-2) +
+            ("0" + today.getUTCDate()).slice(-2) +
+            ("0" + today.getUTCHours()).slice(-2) +
+            ("0" + today.getUTCMinutes()).slice(-2);
+
+        return "NoOID_" + (merchantID ? merchantID + "_" : "") + Math.round(Math.random() * 1e5) + "_" + todayFormatted;
+    }
+
 console.log("start RAN module");
-  
+    
     // The sRAN function builds up the affiliate img tag src url based on the DataLayer
-    var sRAN = function() {
+    var sRAN  = function() {
         var dl = (window[dln] && window[dln].Sale && window[dln].Sale.Basket) ? window[dln].Sale.Basket : {};
         var config = config || dl["affiliateConfig"] || {};
 
@@ -158,15 +201,23 @@ console.log("start RAN module");
         3) Basket.MID       
         */
 
+        // do not fire tag if we are missing the MID
         var merchantID = readRMStoreValue("amid", "ranMID", "", config) || dl["ranMID"];
         if (!merchantID) {
             return false;
         }
 
+        // do not fire tag if allowCommission is set to false
         var allowCommission = typeof(config["allowCommission"]) === "undefined" ? true : config["allowCommission"] === "false" ? false : true;
         if (!allowCommission) {
             return false
         }
+        
+        // do not fire tag if we are missing orderid and lineitems
+        if(!dl["orderid"] && !(dl["lineitems"] && dl["lineitems"].length)) {
+            return false;
+        }
+
 
         var domain = readRMStoreValue("adn", "domain", "track.linksynergy.com", config);
         var trackingMethod = readRMStoreValue("atm", "tagType", "pixel", config);
@@ -176,37 +227,69 @@ console.log("start RAN module");
         var removeTaxFromProducts = readRMStoreValue("artp", "removeTaxFromProducts", "false", config);
         var removeTaxFromDiscount = readRMStoreValue("artd", "removeTaxFromDiscount", "false", config);
         var taxRate = readRMStoreValue("atr", "taxRate", (dl['taxRate'] || 0), config);
-        var useCentValues = readRMStoreValue("acv", "centValues", "true", config);
         var land = readRMStoreValue('ald', 'land', false, {}) || (config["land"] && config["land"] === true ? readRMCookie("ranLandDateTime") : config["land"]) || false;
         var tr = readRMStoreValue('atrv', 'tr', false, {}) || (config["tr"] && config["tr"] === true ? readRMCookie("ranSiteID") : config["tr"]) || false;
+        var useCentValues = readRMStoreValue("acv", "centValues", "true", config);
+        var nonCentCurrencies = readRMStoreValue("ancc", "nonCentCurrencies", "JPY", config);
 
-
+        
         taxRate = Math.abs(Number(taxRate));
         var taxPercent = (100 + taxRate) / 100;
 
-        var OrderID = encodeURIComponent(dl["orderid"] || "OrderNumberNotAvailable");
-        var sku_list = "";
-        var quantity_list = "";
-        var itemvalue_list = "";
-        var name_list = "";
+        var order_id = dl["orderid"] || generateOrderId(merchantID);
+
+        order_id = encodeURIComponent(order_id);
+
+
         var currency = dl["currency"] || "";
         currency = encodeURIComponent(currency.toUpperCase());
 
-        var multiplyBy100 = (useCentValues && useCentValues !== 'false') ? 100 : 1;
+        var multiplyBy100 = (useCentValues && useCentValues !== 'false');
+        var isNonCentCurrency = false;
 
-        var taxAmount = dl["taxAmount"] ? Math.abs(multiplyBy100 * Number(dl["taxAmount"])) : 0;
-        var discountAmount = dl["discountAmount"] ? Math.abs(multiplyBy100 * Number(dl["discountAmount"])) : 0;
-        var discountAmountLessTax = dl["discountAmountLessTax"] ? Math.abs(multiplyBy100 * Number(dl["discountAmountLessTax"])) : 0;
+        // determine that currency of the order does not have a cent part (e.g JPY)
+        if(currency && nonCentCurrencies) {
+            nonCentCurrencies = (nonCentCurrencies + "").split(',');
+            for(var index = 0; index < nonCentCurrencies.length; index++) {
+                if(nonCentCurrencies[index]==currency) {
+                    isNonCentCurrency = true;
+                }
+            }
+        }
+
+        // this function can be used to ensure any money value is being rounded consistently before output.
+        // you should not round anything until it is passed into the final string
+        var currencyValueToString = function(val) {
+            // non cent currencies only need to return whole integer values
+            if(isNonCentCurrency) {
+                val = Math.round(val);
+            }
+            if(multiplyBy100) { 
+                val = val * 100;
+                val = Math.round(val);
+            } else {
+                val = (Math.round(val * 100) / 100)
+            }
+
+            // return a rounded value
+            return val + "";
+        }
 
 
-        if (!discountAmountLessTax && discountAmount && removeTaxFromDiscount && taxRate) {
+
+        var taxAmount = dl["taxAmount"] ? Math.abs(Number(dl["taxAmount"])) : 0;
+        var discountAmount = dl["discountAmount"] ? Math.abs(Number(dl["discountAmount"])) : 0;
+        var discountAmountLessTax = dl["discountAmountLessTax"] ? Math.abs(Number(dl["discountAmountLessTax"])) : 0;
+        
+
+        if ( !discountAmountLessTax && discountAmount && removeTaxFromDiscount && taxRate) {
             discountAmountLessTax = discountAmount / taxPercent;
         }
         discountAmountLessTax = discountAmountLessTax || discountAmount;
 
 
         var suffix = 'ep';
-        if (trackingMethod === "mop") {
+        if(trackingMethod === "mop") {
             suffix = "eventnvppixel";
         }
 
@@ -222,7 +305,7 @@ console.log("start RAN module");
         var totalSaleValue = 0;
 
         for (var i = 0; i < (dl["lineitems"] ? dl["lineitems"].length : 0); i++) {
-            if (dl["lineitems"][i]) {
+            if(dl["lineitems"][i]) {
                 var isDuplicateItem = false;
                 var item = window.JSON ? JSON.parse(JSON.stringify(dl["lineitems"][i])) : dl["lineitems"][i];
 
@@ -254,25 +337,28 @@ console.log("start RAN module");
                     aggregatedLineItems.push(item);
                 }
 
-                totalSaleValue += totalLineItemValue * multiplyBy100;
+                totalSaleValue += totalLineItemValue;
             }
         }
 
-
+        
+        var sku_list = "";
+        var quantity_list = "";
+        var itemvalue_list = "";
+        var name_list = "";
         var optionalDataLineItems = {};
+
         for (var i = 0; i < aggregatedLineItems.length; i++) {
 
             var item = aggregatedLineItems[i];
 
             var itemSKU = encodeURIComponent(item["SKU"]);
-            var itemPrice = item["totalValue"] || item["totalValue"];
+            var itemPrice = item["totalValue"];
             var itemQuantity = item["quantity"];
             var itemName = encodeURIComponent(item["productName"]) || "";
 
-            var totalItemAmount = itemPrice * multiplyBy100;
-
             if (discountReporting.toLowerCase() === "item" && discountAmountLessTax) {
-                totalItemAmount -= (discountAmountLessTax * totalItemAmount) / totalSaleValue;
+                itemPrice -= (discountAmountLessTax * itemPrice) / totalSaleValue;
             }
 
             var optionalData = item.optionalData;
@@ -285,7 +371,7 @@ console.log("start RAN module");
 
             sku_list += skuPrefix + itemSKU + "|";
             quantity_list += itemQuantity + "|";
-            itemvalue_list += Math.round(totalItemAmount) + "|";
+            itemvalue_list += currencyValueToString(itemPrice) + "|";    
             name_list += skuPrefix + itemName + "|";
 
         }
@@ -296,12 +382,12 @@ console.log("start RAN module");
         name_list = name_list.slice(0, -1);
 
         // round discount and tax now as they will not be used in any further calculations.
-        if (discountAmountLessTax) {
-            discountAmountLessTax = Math.round(discountAmountLessTax);
+        if(discountAmountLessTax) {
+            discountAmountLessTax = currencyValueToString(discountAmountLessTax);
         }
 
-        if (taxAmount) {
-            taxAmount = Math.round(taxAmount);
+        if(taxAmount) {
+            taxAmount = currencyValueToString(taxAmount);
         }
 
         if (discountAmountLessTax && discountReporting.toLowerCase() === "order") {
@@ -324,17 +410,17 @@ console.log("start RAN module");
 
 
         var imgUrl = "https://" + domain + "/" + suffix + "?mid=" + merchantID;
-        imgUrl += "&ord=" + OrderID;
+        imgUrl += "&ord=" + order_id;
+        imgUrl += land ? "&land=" + land : '';
+        imgUrl += tr ? "&tr=" + tr : '';
+        imgUrl += "&cur=" + currency;
         imgUrl += "&skulist=" + sku_list;
         imgUrl += "&qlist=" + quantity_list;
         imgUrl += "&amtlist=" + itemvalue_list;
-        imgUrl += "&cur=" + currency;
         imgUrl += "&img=1";
         imgUrl += '&spi=' + window[dln].events.SPIVersion;
 
 
-        imgUrl += land ? "&land=" + land : '';
-        imgUrl += tr ? "&tr=" + tr : '';
 
 
         if (discountAmountLessTax && discountReporting.toLowerCase() === "item") {
@@ -373,27 +459,24 @@ console.log("start RAN module");
                     imgUrl += '|';
                 }
 
-                if (taxAmount && removeOrderLevelTax) {
+                if(taxAmount && removeOrderLevelTax) {
                     imgUrl += '|';
                 }
             }
         }
 
-
+        
         // namelist added at the end as it has lowest importance
         imgUrl += "&namelist=" + name_list;
 
+        var truncation_limit = 8000;
 
-        if (imgUrl[imgUrl.length - 1] === "&") {
-            imgUrl = imgUrl.slice(0, -1);
-        }
-
-        if (imgUrl.length > 2037) {
-            var n = 2037;
+        if (imgUrl.length > truncation_limit) {
+            var n = truncation_limit;
 
             while (n > 0) {
-                if (imgUrl.charAt(n) == '&') {
-                    imgUrl = imgUrl.slice(0, n);
+                if(imgUrl.charAt(n) == '&') {
+                    imgUrl = imgUrl.slice(0,n);
                     break;
                 } else {
                     n--;
@@ -406,130 +489,139 @@ console.log("start RAN module");
         addElement('img', imgUrl, 'body');
     };
 
-  console.log("end RAN module");
-  
-// The sDisplay function builds up the display/mediaforge script/iframe/img tag src url based on the DataLayer
+console.log("end RAN module");
+	
+    // The sDisplay function builds up the display/mediaforge script/iframe/img tag src url based on the DataLayer
     var sDisplay  = function() {
         var dl = (window[dln] && window[dln].Sale && window[dln].Sale.Basket) ? window[dln].Sale.Basket : {};
         var config = config || dl["displayConfig"] || {};
 
-        if (dl["orderid"] && dl["conversionType"]) {
+        /*
+        Display MID should be based in this order:
+        1) rdMID cookie if it exists
+        2) config.MID  
+        */
 
-            /*
-            Display MID should be based in this order:
-            1) rdMID cookie if it exists
-            2) config.MID   
-            */
-    
-            var merchantID = readRMStoreValue("dmid", "rdMID", "", config);
-            if (!merchantID) {
-                return false;
-            }
+        // do not fire tag if we are missing the MID
+        var merchantID = readRMStoreValue("dmid", "rdMID", "", config);
+        if (!merchantID) {
+            return false;
+        }
 
-            var tagType = readRMStoreValue("dtm", "tagType", "js", config);
-            var domain = readRMStoreValue("ddn", "domain", "tags.rd.linksynergy.com", config);
-            var includeCustomerStatus = readRMStoreValue("dis", "includeStatus", "false", config);
-            var allowCommission = readRMStoreValue("dcomm", "allowCommission", "notset", config);
-            var useUnitPrice = readRMStoreValue("duup", "useUnitPrice", "false", config);
-            var removeTaxFromProducts = readRMStoreValue("drtp", "removeTaxFromProducts", "false", config);
-            var removeTaxFromDiscount = readRMStoreValue("drtd", "removeTaxFromDiscount", "false", config);
-            var taxRate = readRMStoreValue("dtr", "taxRate", (dl['taxRate'] || 0), config);
-    
-            var tvalid = "";
-            // tvalid will only be set if allowCommission was explicitly set to 'true' or 'false' or '1' or '0'
-            if (allowCommission === 'true' || allowCommission === true || allowCommission === '1' || allowCommission === 1) {
-                tvalid = '1';
-            } else if (allowCommission === 'false' || allowCommission === false || allowCommission === '0' || allowCommission === 0) {
-                tvalid = '0';
-            }
-
-            // tagType is restircted to img, js or if. js is the defualt value for any unrecognised tagType
-            tagType = (tagType === "js" || tagType === "if" || tagType === "img") ? tagType : "js";
-            // work out the corresponding nodeType to the chosen tagType
-            var nodeType = 'script';
-            if(tagType === "if") {
-                nodeType = 'iframe';
-            } else if(tagType === "img") {
-                nodeType = 'img';
-            }
-            
-            // useUnitPrice should only be set if the config value is 'true', true , '1' or 1
-            if (useUnitPrice === 'true' || useUnitPrice === true || useUnitPrice === '1' || useUnitPrice === 1) {
-                useUnitPrice = true;
-            }
-    
-            var customerStatus = (dl["customerStatus"] || "") + "";
-            var orderPrefix = "";
-            if (customerStatus && includeCustomerStatus && (customerStatus.toUpperCase() == "EXISTING" || customerStatus.toUpperCase() == "RETURNING")) {
-                orderPrefix = "R_";
-            }
-
-            var orderNumber = encodeURIComponent(orderPrefix + dl["orderid"]);
-            var currency = encodeURIComponent(dl['currency'] || '');
-            var pageType = "conv";
-            var totalSaleValue = 0;
-            var productIDs = "";
-
-            taxRate = Math.abs(Number(taxRate));
-            var taxPercent = (100 + taxRate) / 100;
-
-            var discountAmount = dl["discountAmount"] ? Math.abs(Number(dl["discountAmount"])) : 0;
-            var discountAmountLessTax = dl["discountAmountLessTax"] ? Math.abs(Number(dl["discountAmountLessTax"])) : 0;
-
-            if(!discountAmountLessTax && discountAmount && removeTaxFromDiscount && taxRate) {
-                discountAmountLessTax = discountAmount / taxPercent;
-            }
-
-            discountAmountLessTax = discountAmountLessTax || discountAmount;
-            discountAmountLessTax = isNaN(discountAmountLessTax) ? 0 : discountAmountLessTax;
+        // do not fire tag if orderid and conversionType are unset
+        if(!dl["orderid"] && !dl["conversionType"]) {
+            return false;
+        }
 
 
-            for (var i = 0; i < (dl["lineitems"] ? dl["lineitems"].length : 0); i++) {
-                if(dl["lineitems"][i]) {
-                    var itemQuantity = Number(dl["lineitems"][i].quantity);
-                    var itemPrice = Number(dl["lineitems"][i].unitPriceLessTax) * itemQuantity;
+        var tagType = readRMStoreValue("dtm", "tagType", "js", config);
+        var domain = readRMStoreValue("ddn", "domain", "tags.rd.linksynergy.com", config);
+        var includeCustomerStatus = readRMStoreValue("dis", "includeStatus", "false", config);
+        var allowCommission = readRMStoreValue("dcomm", "allowCommission", "notset", config);
+        var useUnitPrice = readRMStoreValue("duup", "useUnitPrice", "false", config);
+        var removeTaxFromProducts = readRMStoreValue("drtp", "removeTaxFromProducts", "false", config);
+        var removeTaxFromDiscount = readRMStoreValue("drtd", "removeTaxFromDiscount", "false", config);
+        var taxRate = readRMStoreValue("dtr", "taxRate", (dl["taxRate"] || 0), config);
 
-                    if(!itemPrice || useUnitPrice) {
-                        if(removeTaxFromProducts && taxRate) {
-                            itemPrice = (Number(dl["lineitems"][i].unitPrice) / taxPercent) * itemQuantity;
-                        } else {
-                            itemPrice = Number(dl["lineitems"][i].unitPrice) * itemQuantity;
-                        }
+        var tvalid = "";
+        // tvalid will only be set if allowCommission was explicitly set to "true" or "false" or "1" or "0"
+        if (allowCommission === "true" || allowCommission === true || allowCommission === "1" || allowCommission === 1) {
+            tvalid = "1";
+        } else if (allowCommission === "false" || allowCommission === false || allowCommission === "0" || allowCommission === 0) {
+            tvalid = "0";
+        }
+
+        // tagType is restircted to img, js or if. js is the defualt value for any unrecognised tagType
+        tagType = (tagType === "js" || tagType === "if" || tagType === "img") ? tagType : "js";
+        // work out the corresponding nodeType to the chosen tagType
+        var nodeType = 'script';
+        if(tagType === "if") {
+            nodeType = 'iframe';
+        } else if(tagType === "img") {
+            nodeType = "img";
+        }
+        
+        // useUnitPrice should only be set if the config value is 'true', true , '1' or 1
+        if (useUnitPrice === "true" || useUnitPrice === true || useUnitPrice === "1" || useUnitPrice === 1) {
+            useUnitPrice = true;
+        }
+
+        var customerStatus = (dl["customerStatus"] || "") + "";
+        var orderPrefix = "";
+        if (customerStatus && includeCustomerStatus && (customerStatus.toUpperCase() == "EXISTING" || customerStatus.toUpperCase() == "RETURNING")) {
+            orderPrefix = "R_";
+        }
+
+        var orderNumber = dl["orderid"];
+        if(!orderNumber) {
+            orderNumber = generateOrderId((dl["conversionType"] +"").toLowerCase() +  '_' + merchantID);
+        }
+        orderNumber = encodeURIComponent(orderPrefix + orderNumber);
+
+        var currency = encodeURIComponent(dl["currency"] || "");
+        var pageType = "conv";
+        var totalSaleValue = 0;
+        var productIDs = "";
+
+        taxRate = Math.abs(Number(taxRate));
+        var taxPercent = (100 + taxRate) / 100;
+
+        var discountAmount = dl["discountAmount"] ? Math.abs(Number(dl["discountAmount"])) : 0;
+        var discountAmountLessTax = dl["discountAmountLessTax"] ? Math.abs(Number(dl["discountAmountLessTax"])) : 0;
+
+        if(!discountAmountLessTax && discountAmount && removeTaxFromDiscount && taxRate) {
+            discountAmountLessTax = discountAmount / taxPercent;
+        }
+
+        discountAmountLessTax = discountAmountLessTax || discountAmount;
+        discountAmountLessTax = isNaN(discountAmountLessTax) ? 0 : discountAmountLessTax;
+
+
+        for (var i = 0; i < (dl["lineitems"] ? dl["lineitems"].length : 0); i++) {
+            if(dl["lineitems"][i]) {
+                var itemQuantity = Number(dl["lineitems"][i].quantity);
+                var itemPrice = Number(dl["lineitems"][i].unitPriceLessTax) * itemQuantity;
+
+                if(!itemPrice || useUnitPrice) {
+                    if(removeTaxFromProducts && taxRate) {
+                        itemPrice = (Number(dl["lineitems"][i].unitPrice) / taxPercent) * itemQuantity;
+                    } else {
+                        itemPrice = Number(dl["lineitems"][i].unitPrice) * itemQuantity;
                     }
-
-                    itemPrice = isNaN(itemPrice) ? 0 : itemPrice;
-
-                    totalSaleValue += itemPrice;
-                    productIDs += encodeURIComponent(dl["lineitems"][i]["SKU"]) + ",";
                 }
 
+                itemPrice = isNaN(itemPrice) ? 0 : itemPrice;
+
+                totalSaleValue += itemPrice;
+                productIDs += encodeURIComponent(dl["lineitems"][i]["SKU"]) + ",";
             }
 
-            totalSaleValue = Math.round(100 * (totalSaleValue - discountAmountLessTax)) / 100;
-            productIDs = productIDs.slice(0, -1);
-
-
-            var script_src = "https://" + domain + "/" + tagType + "/" + merchantID;
-                script_src += '/?pt=' + pageType;
-                script_src += "&orderNumber=" + orderNumber;
-                script_src += '&spi=' + window[dln].events.SPIVersion;
-
-            if(totalSaleValue) {
-                script_src += "&price=" + totalSaleValue;
-            }
-            if(currency) {
-                script_src += "&cur=" + currency;
-            }
-            if(tvalid) {
-                script_src += "&tvalid=" + tvalid;
-            }
-            if(productIDs) {
-                script_src += "&prodID=" + productIDs;
-            }
-
-            
-            addElement(nodeType, script_src, 'body');
         }
+
+        totalSaleValue = Math.round(100 * (totalSaleValue - discountAmountLessTax)) / 100;
+        productIDs = productIDs.slice(0, -1);
+
+
+        var script_src = "https://" + domain + "/" + tagType + "/" + merchantID;
+            script_src += "/?pt=" + pageType;
+            script_src += "&orderNumber=" + orderNumber;
+            script_src += "&spi=" + window[dln].events.SPIVersion;
+
+        if(totalSaleValue) {
+            script_src += "&price=" + totalSaleValue;
+        }
+        if(currency) {
+            script_src += "&cur=" + currency;
+        }
+        if(tvalid) {
+            script_src += "&tvalid=" + tvalid;
+        }
+        if(productIDs) {
+            script_src += "&prodID=" + productIDs;
+        }
+
+        
+        addElement(nodeType, script_src, "body");
 
     };
 
@@ -548,10 +640,15 @@ console.log("start RAN module");
             2) config.MID  
         */
 
+        // do not fire tag if we are missing the MID
         var KenshooCustomerID = readRMStoreValue("smid", "rsMID", "", config);
         if (!KenshooCustomerID) {
             return false;
         }
+
+
+
+
         var KenshooAccountID = readRMStoreValue("said", "accountID", "113", config);
         var KenshooClickID = readRMStoreValue("sclid", "clickID", "", config);
 
@@ -569,7 +666,7 @@ console.log("start RAN module");
 
             // Optional Parameters
 
-            params.orderId = encodeURIComponent(dl.orderid || ''); // STILL NEEDS GDPR LOGIC!
+            params.orderId = encodeURIComponent(dl.orderid || generateOrderId(conversionType)); // STILL NEEDS GDPR LOGIC!
             params.promoCode = encodeURIComponent(dl.discountCode || "");
 
             if(KenshooClickID) {
@@ -618,6 +715,7 @@ console.log("start RAN module");
         addElement('script', script_src, 'body', null, submitParameters);
     };
 
+
     // create an object in the DataLayer containing the functions defined
     // e.g window.DataLayer.SPI.sRAN
     window[dln]['SPI'] = {
@@ -635,3 +733,5 @@ console.log("start RAN module");
     sRAN();
     sDisplay();
     sSearch();
+
+}(window, document, rm_trans);
