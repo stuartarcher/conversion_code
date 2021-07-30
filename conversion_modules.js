@@ -1,3 +1,4 @@
+console.log("start conversion module");
 window.__rm_trans=function(r){
 var rm_trans = r;
 !function(a,b,c){
